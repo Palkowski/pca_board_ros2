@@ -77,12 +77,18 @@ enum pwm_on_off_bits {
     pwm_off_full = 0x10
 };
 
+struct servo_config {
+    double pwm_freq;       /* Hz */
+    double pulse_len_min;  /* ms */
+    double pulse_len_max;  /* ms */
+    double angle_min;      /* deg */
+    double angle_max;      /* deg */
+};
+
 const int pwm_min = 0x0;
 const int pwm_max = 0xfff;
 const int prescale_min = 0x03;
 const int prescale_max = 0xff;
-const float servo_high_ms_min = 0.4;
-const float servo_high_ms_max = 2.4;
 const double in_osc_hz = 25000000.0;  /* PCA9685 internal oscillator */
 
 /* Opens I2C communication and returns file descriptor assigned to I2C
@@ -97,7 +103,7 @@ int select_slave_addr(int i2c_fd, long addr);
 int set_prescale(int i2c_fd, int value);
 
 /* Set PWM frequency. Acceptable values are from 24 to 1526 hz. */
-int set_pwm_freq(int i2c_fd, int freq, double osc_clock_hz);
+int set_pwm_freq(int i2c_fd, double freq_hz, double osc_clock_hz);
 
 /* Set start `time_on` and end `time_off` of high signal of PWM. Limit is
  * 4095 (0xFFF) */
@@ -113,10 +119,10 @@ int pca_sleep(int i2c_fd);
 int restart(int i2c_fd);
 
 /* Converts time in milliseconds to clock value. */
-int ms_to_cnt(float time_ms, int freq_hz);
+int ms_to_cnt(double time_ms, double freq_hz);
 
 /* Converts clock value to time in milliseconds. */
-float cnt_to_ms(int cnt, int freq_hz);
+double cnt_to_ms(int cnt, double freq_hz);
 
 /* Reads TIME OFF counter value. */
 int read_toff(int i2c_fd, int channel);
@@ -125,10 +131,11 @@ int read_toff(int i2c_fd, int channel);
 int read_ton(int i2c_fd, int channel);
 
 /* Returns current servo angle in deg. */
-int get_servo_angle(int i2c_fd, int channel, int freq_hz);
+double get_servo_angle(int i2c_fd, int channel,
+                      const struct servo_config *cf);
 
 /* Set PWM high voltage time in milliseconds. */
-int set_pwm_ms(int i2c_fd, int channel, float hvt_ms, int freq_hz);
+int set_pwm_ms(int i2c_fd, int channel, double hvt_ms, double freq_hz);
 
 /* Loops through all PWM counter values from max to min, sets servo to
  * minimum possible angle. */
@@ -138,17 +145,20 @@ void find_min_angle(int i2c_fd, int channel);
  * maximum possible angle. */
 void find_max_angle(int i2c_fd, int channel);
 
-/* Set servo angle from 0 to 180 degreees. */
-int set_servo_angle(int i2c_fd, int channel, int angle_deg, int freq_hz);
+/* Set servo angle. */
+int set_servo_angle(int i2c_fd, int channel, double angle_deg,
+                    const struct servo_config *cf);
 
 /* Set duty PWM cycle from 0 to 100%. */
-int set_duty_cycle(int i2c_fd, int channel, float dutyc);
+int set_duty_cycle(int i2c_fd, int channel, double dutyc);
 
+#ifdef DEBUG
 /* Debug info */
-void explain_mode_1(int val);
+void print_mode_1(int val);
 
-void explain_mode_2(int val);
+void print_mode_2(int val);
 
 void print_regs(int i2c_fd, int channel);
+#endif
 
 #endif

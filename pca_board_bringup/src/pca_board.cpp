@@ -28,6 +28,20 @@ const char *ang_max_str[] = {
     "angle_max_12", "angle_max_13", "angle_max_14", "angle_max_15"
 };
 
+const char *pl_min_str[] = {
+    "pl_min_0", "pl_min_1", "pl_min_2", "pl_min_3",
+    "pl_min_4", "pl_min_5", "pl_min_6", "pl_min_7",
+    "pl_min_8", "pl_min_9", "pl_min_10", "pl_min_11",
+    "pl_min_12", "pl_min_13", "pl_min_14", "pl_min_15"
+};
+
+const char *pl_max_str[] = {
+    "pl_max_0", "pl_max_1", "pl_max_2", "pl_max_3",
+    "pl_max_4", "pl_max_5", "pl_max_6", "pl_max_7",
+    "pl_max_8", "pl_max_9", "pl_max_10", "pl_max_11",
+    "pl_max_12", "pl_max_13", "pl_max_14", "pl_max_15"
+};
+
 // PCA9685 16 channel PWM board node.
 class PcaBoard : public rclcpp::Node
 {
@@ -40,13 +54,13 @@ class PcaBoard : public rclcpp::Node
         dutycycle_sub_queue_size = 1
     };
 
-    int slave_addr;      // board I2C address
-    int i2c_adapter_num; // /dev/i2c-<num>
-    int i2c_fd;          // file descriptor assigned to I2C connection
-    int freq;            // PWM frequency [hz]
-    int angle_min[max_channels];
-    int angle_max[max_channels];
-    int cur_angles[max_channels];
+    int slave_addr;       // board I2C address
+    int i2c_adapter_num;  // /dev/i2c-<num>
+    int i2c_fd;           // file descriptor assigned to I2C connection
+    double osc_clock_hz;  // PCA oscillator frequency [hz]
+    double freq;           // PWM frequency [hz]
+    servo_config scf[max_channels];  // array of servo configs
+    double cur_angles[max_channels];  // array of current servo angles
 
     rclcpp::Subscription<ServoAngleDeg>::SharedPtr servo_angle_set_sub_;
     rclcpp::Subscription<ServoAngleDeg>::SharedPtr servo_angle_add_sub_;
@@ -55,12 +69,13 @@ class PcaBoard : public rclcpp::Node
     rclcpp::Subscription<DutyCyclePercent>::SharedPtr duty_cycle_set_sub_;
     rclcpp::Service<ServoState>::SharedPtr servo_state_service_;
 
+    inline void ManageParams();
+    inline void ManageTopics();
     void ConnectI2C();
     void SelectSlaveAddr();
     void WriteFreqPWM();
-    void SetServoAngle(int channel, int angle_deg);
-    void SetDutyCycle(int channel, float duty_cycle);
-
+    void SetServoAngle(int channel, double angle_deg);
+    void SetDutyCycle(int channel, double duty_cycle);
     void ServoAngleSetCallback(const ServoAngleDeg::SharedPtr msg);
     void ServoAngleAddCallback(const ServoAngleDeg::SharedPtr msg);
     void MultiServoSetCallback(const MultiServoAngleDeg::SharedPtr msg);
@@ -102,11 +117,11 @@ void PcaBoard::SelectSlaveAddr()
 
 void PcaBoard::WriteFreqPWM()
 {
-    int tmp = set_pwm_freq(i2c_fd, freq, in_osc_hz);
+    int tmp = set_pwm_freq(i2c_fd, freq, osc_clock_hz);
     if (tmp < 0){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),
-            "Couldn't set board PWM frequency to %d hz.",
+            "Couldn't set board PWM frequency to %lf hz.",
             freq
         );
     }
@@ -168,32 +183,41 @@ void PcaBoard::MultiServoSetCallback(const MultiServoAngleDeg::SharedPtr msg)
     }
 }
 
-PcaBoard::PcaBoard() : Node("pca_board")
+void PcaBoard::ManageParams()
 {
     declare_parameter("slave_addr", 0x40);  // default PCA slave address
-    declare_parameter("i2c", 1);  // i2c bus
+    declare_parameter("i2c", 1);            // i2c bus
     declare_parameter("freq", 50);  // required PWM freq for most servos
+    declare_parameter("osc_clock_hz", in_osc_hz);  // internal is default
+    declare_parameter("angle_min", 0);
+    declare_parameter("angle_max", 180);
+    declare_parameter("pl_min", 0.4);
+    declare_parameter("pl_max", 2.4);
 
     slave_addr = get_parameter("slave_addr").as_int();
     i2c_adapter_num = get_parameter("i2c").as_int();
     freq = get_parameter("freq").as_int();
+    osc_clock_hz = get_parameter("osc_clock_hz").as_double();
+    double angle_min_default = get_parameter("angle_min").as_double();
+    double angle_max_default = get_parameter("angle_max").as_double();
+    double pl_min_default = get_parameter("pl_min").as_double();
+    double pl_max_default = get_parameter("pl_max").as_double();
 
     for (int i = 0; i < max_channels; i++){
-        declare_parameter(ang_min_str[i], 0);
-        declare_parameter(ang_max_str[i], 180);
-        angle_min[i] = get_parameter(ang_min_str[i]).as_int();
-        angle_max[i] = get_parameter(ang_max_str[i]).as_int();
+        scf[i].pwm_freq = freq;  // one PWM for an entire board
+        declare_parameter(ang_min_str[i], angle_min_default);
+        declare_parameter(ang_max_str[i], angle_max_default);
+        declare_parameter(pl_min_str[i], pl_min_default);
+        declare_parameter(pl_max_str[i], pl_max_default);
+        scf[i].pulse_len_min = get_parameter(pl_min_str[i]).as_double();
+        scf[i].pulse_len_max = get_parameter(pl_max_str[i]).as_double();
+        scf[i].angle_min = get_parameter(ang_min_str[i]).as_double();
+        scf[i].angle_max = get_parameter(ang_max_str[i]).as_double();
     }
+}
 
-    ConnectI2C();
-    SelectSlaveAddr();
-    WriteFreqPWM();
-    WakeUp();
-
-    for (int i = 0; i < max_channels; i++){
-        cur_angles[i] = get_servo_angle(i2c_fd, i, freq);
-    }
-
+void PcaBoard::ManageTopics()
+{
     servo_angle_set_sub_ = create_subscription<ServoAngleDeg>(
         "servo_angle_set", servoset_sub_queue_size,
         std::bind(&PcaBoard::ServoAngleSetCallback, this, _1)
@@ -220,28 +244,44 @@ PcaBoard::PcaBoard() : Node("pca_board")
     );
 }
 
-void PcaBoard::SetServoAngle(int channel, int angle_deg)
+PcaBoard::PcaBoard() : Node("pca_board")
+{
+    ManageParams();
+    ManageTopics();
+
+    ConnectI2C();
+    SelectSlaveAddr();
+    WriteFreqPWM();
+    WakeUp();
+
+    for (int i = 0; i < max_channels; i++){
+        cur_angles[i] = get_servo_angle(i2c_fd, i, &scf[i]);
+    }
+}
+
+void PcaBoard::SetServoAngle(int channel, double angle_deg)
 {
     int tmp;
-    if (angle_deg > angle_max[channel]){
-        cur_angles[channel] = angle_max[channel];
-    } else if (angle_deg < angle_min[channel]){
-        cur_angles[channel] = angle_min[channel];
+    if (angle_deg > scf[channel].angle_max){
+        cur_angles[channel] = scf[channel].angle_max;
+    } else if (angle_deg < scf[channel].angle_min){
+        cur_angles[channel] = scf[channel].angle_min;
     } else {
         cur_angles[channel] = angle_deg;
     }
-    tmp = set_servo_angle(i2c_fd, channel, cur_angles[channel], freq);
+    tmp = set_servo_angle(i2c_fd, channel, cur_angles[channel],
+                          &scf[channel]);
     if (tmp < 0){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),
-            "Couldn't set servo_%d angle to %d.",
+            "Couldn't set servo_%d angle to %lf.",
             channel,
             angle_deg
         );
     }
 }
 
-void PcaBoard::SetDutyCycle(int channel, float duty_cycle)
+void PcaBoard::SetDutyCycle(int channel, double duty_cycle)
 {
     int tmp;
     if (channel < 0 || channel >= max_channels){
@@ -255,7 +295,7 @@ void PcaBoard::SetDutyCycle(int channel, float duty_cycle)
     if (duty_cycle < 0. || duty_cycle > 100.){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),
-            "Wrong duty cycle %f%%. Value must be in range [0, 100]%%.",
+            "Wrong duty cycle %lf%%. Value must be in range [0, 100]%%.",
             duty_cycle
         );
         return;
@@ -264,7 +304,7 @@ void PcaBoard::SetDutyCycle(int channel, float duty_cycle)
     if (tmp < 0){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),
-            "Couldn't set channel %d duty cycle to %f.",
+            "Couldn't set channel %d duty cycle to %lf.",
             channel,
             duty_cycle
         );
@@ -276,7 +316,7 @@ void PcaBoard::PwmFreqSetCallback(const PWMFreqHz::SharedPtr msg)
     if (msg->freq < 24 || msg->freq > 1526){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),
-            "Couldn't set pwm frequency to %d Hz. Value must be in range "
+            "Couldn't set pwm frequency to %lf Hz. Value must be in range "
             "[24, 1526] Hz.",
             msg->freq
         );

@@ -1,1 +1,1 @@
-int32 freq
+float64 freq

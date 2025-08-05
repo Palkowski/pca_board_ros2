@@ -1,2 +1,2 @@
 int32 channel
-float32 duty_cycle
+float64 duty_cycle

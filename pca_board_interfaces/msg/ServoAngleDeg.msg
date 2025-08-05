@@ -1,2 +1,2 @@
 int32 channel
-int32 angle
+float64 angle
