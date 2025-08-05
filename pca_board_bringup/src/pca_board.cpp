@@ -196,7 +196,7 @@ void PcaBoard::ManageParams()
 
     slave_addr = get_parameter("slave_addr").as_int();
     i2c_adapter_num = get_parameter("i2c").as_int();
-    freq = get_parameter("freq").as_int();
+    freq = get_parameter("freq").as_double();
     osc_clock_hz = get_parameter("osc_clock_hz").as_double();
     double angle_min_default = get_parameter("angle_min").as_double();
     double angle_max_default = get_parameter("angle_max").as_double();
