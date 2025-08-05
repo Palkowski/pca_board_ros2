@@ -3,7 +3,7 @@ project(pca_board_bringup)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -pedantic -Wfatal-errors
-        -Wfloat-equal -Wnon-virtual-dtor -Wshadow -Werror=vla -O2)
+        -Wfloat-equal -Wshadow -Werror=vla -O2)
 endif()
 
 # find dependencies
