@@ -185,14 +185,14 @@ void PcaBoard::MultiServoSetCallback(const MultiServoAngleDeg::SharedPtr msg)
 
 void PcaBoard::ManageParams()
 {
-    declare_parameter("slave_addr", 0x40);  // default PCA slave address
-    declare_parameter("i2c", 1);            // i2c bus
-    declare_parameter("freq", 50);  // required PWM freq for most servos
-    declare_parameter("osc_clock_hz", in_osc_hz);  // internal is default
-    declare_parameter("angle_min", 0);
-    declare_parameter("angle_max", 180);
-    declare_parameter("pl_min", 0.4);
-    declare_parameter("pl_max", 2.4);
+    declare_parameter<int>("slave_addr", 0x40);
+    declare_parameter<int>("i2c", 1);
+    declare_parameter<double>("freq", 50.0);
+    declare_parameter<double>("osc_clock_hz", in_osc_hz);
+    declare_parameter<double>("angle_min", 0.0);
+    declare_parameter<double>("angle_max", 180.0);
+    declare_parameter<double>("pl_min", 0.4);
+    declare_parameter<double>("pl_max", 2.4);
 
     slave_addr = get_parameter("slave_addr").as_int();
     i2c_adapter_num = get_parameter("i2c").as_int();
@@ -205,10 +205,10 @@ void PcaBoard::ManageParams()
 
     for (int i = 0; i < max_channels; i++){
         scf[i].pwm_freq = freq;  // one PWM for an entire board
-        declare_parameter(ang_min_str[i], angle_min_default);
-        declare_parameter(ang_max_str[i], angle_max_default);
-        declare_parameter(pl_min_str[i], pl_min_default);
-        declare_parameter(pl_max_str[i], pl_max_default);
+        declare_parameter<double>(ang_min_str[i], angle_min_default);
+        declare_parameter<double>(ang_max_str[i], angle_max_default);
+        declare_parameter<double>(pl_min_str[i], pl_min_default);
+        declare_parameter<double>(pl_max_str[i], pl_max_default);
         scf[i].pulse_len_min = get_parameter(pl_min_str[i]).as_double();
         scf[i].pulse_len_max = get_parameter(pl_max_str[i]).as_double();
         scf[i].angle_min = get_parameter(ang_min_str[i]).as_double();
