@@ -14,6 +14,32 @@ using namespace pca_board_interfaces::msg;
 using namespace pca_board_interfaces::srv;
 
 
+const char *angle_range_str[] = {
+    "angle_range_0", "angle_range_1", "angle_range_2", "angle_range_3",
+    "angle_range_4", "angle_range_5", "angle_range_6", "angle_range_7",
+    "angle_range_8", "angle_range_9", "angle_range_10", "angle_range_11",
+    "angle_range_12", "angle_range_13", "angle_range_14", "angle_range_15"
+};
+
+const char *pl_min_str[] = {
+    "pl_min_0", "pl_min_1", "pl_min_2", "pl_min_3", "pl_min_4", "pl_min_5",
+    "pl_min_6", "pl_min_7", "pl_min_8", "pl_min_9", "pl_min_10",
+    "pl_min_11", "pl_min_12", "pl_min_13", "pl_min_14", "pl_min_15"
+};
+
+const char *pl_max_str[] = {
+    "pl_max_0", "pl_max_1", "pl_max_2", "pl_max_3", "pl_max_4", "pl_max_5",
+    "pl_max_6", "pl_max_7", "pl_max_8", "pl_max_9", "pl_max_10",
+    "pl_max_11", "pl_max_12", "pl_max_13", "pl_max_14", "pl_max_15"
+};
+
+const char *zero_pos_str[] = {
+    "zero_pos_0", "zero_pos_1", "zero_pos_2", "zero_pos_3", "zero_pos_4",
+    "zero_pos_5", "zero_pos_6", "zero_pos_7", "zero_pos_8", "zero_pos_9",
+    "zero_pos_10", "zero_pos_11", "zero_pos_12", "zero_pos_13",
+    "zero_pos_14", "zero_pos_15"
+};
+
 const char *ang_min_str[] = {
     "angle_min_0", "angle_min_1", "angle_min_2", "angle_min_3",
     "angle_min_4", "angle_min_5", "angle_min_6", "angle_min_7",
@@ -28,19 +54,6 @@ const char *ang_max_str[] = {
     "angle_max_12", "angle_max_13", "angle_max_14", "angle_max_15"
 };
 
-const char *pl_min_str[] = {
-    "pl_min_0", "pl_min_1", "pl_min_2", "pl_min_3",
-    "pl_min_4", "pl_min_5", "pl_min_6", "pl_min_7",
-    "pl_min_8", "pl_min_9", "pl_min_10", "pl_min_11",
-    "pl_min_12", "pl_min_13", "pl_min_14", "pl_min_15"
-};
-
-const char *pl_max_str[] = {
-    "pl_max_0", "pl_max_1", "pl_max_2", "pl_max_3",
-    "pl_max_4", "pl_max_5", "pl_max_6", "pl_max_7",
-    "pl_max_8", "pl_max_9", "pl_max_10", "pl_max_11",
-    "pl_max_12", "pl_max_13", "pl_max_14", "pl_max_15"
-};
 
 // PCA9685 16 channel PWM board node.
 class PcaBoard : public rclcpp::Node
@@ -53,13 +66,19 @@ class PcaBoard : public rclcpp::Node
         pwmset_sub_queue_size = 1,
         dutycycle_sub_queue_size = 1
     };
+    struct servo_config {
+        double zero_pos;
+        double min;  // limits
+        double max;
+    };
 
     int slave_addr;       // board I2C address
     int i2c_adapter_num;  // /dev/i2c-<num>
     int i2c_fd;           // file descriptor assigned to I2C connection
     double osc_clock_hz;  // PCA oscillator frequency [hz]
-    double freq;           // PWM frequency [hz]
-    servo_config scf[max_channels];  // array of servo configs
+    double freq;          // PWM frequency [hz]
+    servo_type stp[max_channels];     // array of servo types
+    servo_config scf[max_channels];   // array of servo configs
     double cur_angles[max_channels];  // array of current servo angles
 
     rclcpp::Subscription<ServoAngleDeg>::SharedPtr servo_angle_set_sub_;
@@ -189,30 +208,38 @@ void PcaBoard::ManageParams()
     declare_parameter<int>("i2c", 1);
     declare_parameter<double>("freq", 50.0);
     declare_parameter<double>("osc_clock_hz", in_osc_hz);
+    declare_parameter<double>("angle_range", 180.0);
+    declare_parameter<double>("pl_min", 1.0);
+    declare_parameter<double>("pl_max", 2.0);
+    declare_parameter<double>("zero_pos", 0.0);
     declare_parameter<double>("angle_min", 0.0);
     declare_parameter<double>("angle_max", 180.0);
-    declare_parameter<double>("pl_min", 0.4);
-    declare_parameter<double>("pl_max", 2.4);
 
     slave_addr = get_parameter("slave_addr").as_int();
     i2c_adapter_num = get_parameter("i2c").as_int();
     freq = get_parameter("freq").as_double();
     osc_clock_hz = get_parameter("osc_clock_hz").as_double();
-    double angle_min_default = get_parameter("angle_min").as_double();
-    double angle_max_default = get_parameter("angle_max").as_double();
+    double angle_range_default = get_parameter("angle_range").as_double();
     double pl_min_default = get_parameter("pl_min").as_double();
     double pl_max_default = get_parameter("pl_max").as_double();
+    double zero_pos_default = get_parameter("zero_pos").as_double();
+    double angle_min_default = get_parameter("angle_min").as_double();
+    double angle_max_default = get_parameter("angle_max").as_double();
 
     for (int i = 0; i < max_channels; i++){
-        scf[i].pwm_freq = freq;  // one PWM for an entire board
-        declare_parameter<double>(ang_min_str[i], angle_min_default);
-        declare_parameter<double>(ang_max_str[i], angle_max_default);
+        declare_parameter<double>(angle_range_str[i], angle_range_default);
         declare_parameter<double>(pl_min_str[i], pl_min_default);
         declare_parameter<double>(pl_max_str[i], pl_max_default);
-        scf[i].pulse_len_min = get_parameter(pl_min_str[i]).as_double();
-        scf[i].pulse_len_max = get_parameter(pl_max_str[i]).as_double();
-        scf[i].angle_min = get_parameter(ang_min_str[i]).as_double();
-        scf[i].angle_max = get_parameter(ang_max_str[i]).as_double();
+        declare_parameter<double>(zero_pos_str[i], zero_pos_default);
+        declare_parameter<double>(ang_min_str[i], angle_min_default);
+        declare_parameter<double>(ang_max_str[i], angle_max_default);
+        stp[i].pwm_freq = freq;  // one PWM for an entire board
+        stp[i].angle_range = get_parameter(angle_range_str[i]).as_double();
+        stp[i].pulse_len_min = get_parameter(pl_min_str[i]).as_double();
+        stp[i].pulse_len_max = get_parameter(pl_max_str[i]).as_double();
+        scf[i].zero_pos = get_parameter(zero_pos_str[i]).as_double();
+        scf[i].min = get_parameter(ang_min_str[i]).as_double();
+        scf[i].max = get_parameter(ang_max_str[i]).as_double();
     }
 }
 
@@ -255,22 +282,23 @@ PcaBoard::PcaBoard() : Node("pca_board")
     WakeUp();
 
     for (int i = 0; i < max_channels; i++){
-        cur_angles[i] = get_servo_angle(i2c_fd, i, &scf[i]);
+        cur_angles[i] = get_servo_angle(i2c_fd, i, &stp[i]) -
+            scf[i].zero_pos;
     }
 }
 
 void PcaBoard::SetServoAngle(int channel, double angle_deg)
 {
     int tmp;
-    if (angle_deg > scf[channel].angle_max){
-        cur_angles[channel] = scf[channel].angle_max;
-    } else if (angle_deg < scf[channel].angle_min){
-        cur_angles[channel] = scf[channel].angle_min;
+    if (angle_deg > scf[channel].max){
+        cur_angles[channel] = scf[channel].max;
+    } else if (angle_deg < scf[channel].min){
+        cur_angles[channel] = scf[channel].min;
     } else {
         cur_angles[channel] = angle_deg;
     }
-    tmp = set_servo_angle(i2c_fd, channel, cur_angles[channel],
-                          &scf[channel]);
+    tmp = set_servo_angle(i2c_fd, channel,
+            cur_angles[channel] + scf[channel].zero_pos, &stp[channel]);
     if (tmp < 0){
         RCLCPP_ERROR(
             rclcpp::get_logger("rclcpp"),

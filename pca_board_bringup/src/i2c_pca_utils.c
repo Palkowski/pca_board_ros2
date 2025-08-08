@@ -134,7 +134,7 @@ int read_ton(int i2c_fd, int channel)
 }
 
 /* Returns current servo angle in deg. */
-double get_servo_angle(int i2c_fd, int channel, const struct servo_config *cf)
+double get_servo_angle(int i2c_fd, int channel, const struct servo_type *cf)
 {
     double ms_on_dur;  /* pulse length in milliseconds   */
     int cnt_on_dur;   /* pulse length in counter values */
@@ -142,10 +142,10 @@ double get_servo_angle(int i2c_fd, int channel, const struct servo_config *cf)
     cnt_on_dur -= read_ton(i2c_fd, channel);
     ms_on_dur = cnt_to_ms(cnt_on_dur, cf->pwm_freq);
     return LIN_MAP(ms_on_dur, cf->pulse_len_min, cf->pulse_len_max,
-                   cf->angle_min, cf->angle_max);
+                   0.0, cf->angle_range);
 }
 
-/* Set PWM high voltage time in milliseconds. */
+/* Set PWM pulse length in milliseconds. */
 int set_pwm_ms(int i2c_fd, int channel, double hvt_ms, double freq_hz)
 {
     return set_pwm(i2c_fd, channel, 0, ms_to_cnt(hvt_ms, freq_hz));
@@ -173,9 +173,9 @@ void find_max_angle(int i2c_fd, int channel)
 
 /* Set servo to angle in degrees. */
 int set_servo_angle(int i2c_fd, int channel, double angle_deg,
-                    const struct servo_config *cf)
+                    const struct servo_type *cf)
 {
-    double hvt = LIN_MAP(angle_deg, cf->angle_min, cf->angle_max,
+    double hvt = LIN_MAP(angle_deg, 0.0, cf->angle_range,
                         cf->pulse_len_min, cf->pulse_len_max);
     return set_pwm_ms(i2c_fd, channel, hvt, cf->pwm_freq);
 }
@@ -187,7 +187,6 @@ int set_duty_cycle(int i2c_fd, int channel, double dutyc)
     return set_pwm(i2c_fd, channel, 0, toff);
 }
 
-#ifdef DEBUG
 /* Debug info */
 void print_mode_1(int val)
 {
@@ -248,34 +247,22 @@ void print_regs(int i2c_fd, int channel)
     res |= (tmp << 8);
     printf("ALL PWM OFF = %d\n", res);
 }
-#endif
 
-# if 0
 /* Program for servo testing */
+/*
 int main(int argc, char **argv)
 {
     int fd, cn, i2c_bus, slave_addr;
     double angle;
-    struct servo_config cf;
+    struct servo_type cf;
 
-    /* MG996R config */
-    /*
-    cf.pwm_freq = 50;
-    cf.pulse_len_min = 0.4;
-    cf.pulse_len_max = 2.4;
-    cf.angle_min = 0;
-    cf.angle_max = 180;
-    */
-
-    /* SG90 config */
     cf.pwm_freq = 50;
     cf.pulse_len_min = 1.0;
     cf.pulse_len_max = 2.0;
-    cf.angle_min = 0;
-    cf.angle_max = 90;
+    cf.angle_range = 90;
 
-    i2c_bus = 1;        /* /dev/i2c-1 */
-    slave_addr = 0x40;  /* default for PCA */
+    i2c_bus = 1;
+    slave_addr = 0x40;
 
     if (argc != 3){
         printf("USAGE: set-servo-angle <channel> <angle>\n");
@@ -299,10 +286,7 @@ int main(int argc, char **argv)
     }
     wake_up(fd);
     set_servo_angle(fd, cn, angle, &cf);
-
-#ifdef DEBUG
     print_regs(fd, cn);
-#endif
     return 0;
 }
-#endif
+*/

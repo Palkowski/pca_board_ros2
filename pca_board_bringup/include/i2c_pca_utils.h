@@ -77,12 +77,11 @@ enum pwm_on_off_bits {
     pwm_off_full = 0x10
 };
 
-struct servo_config {
+struct servo_type {
     double pwm_freq;       /* Hz */
+    double angle_range;    /* deg */
     double pulse_len_min;  /* ms */
     double pulse_len_max;  /* ms */
-    double angle_min;      /* deg */
-    double angle_max;      /* deg */
 };
 
 const int pwm_min = 0x0;
@@ -132,9 +131,9 @@ int read_ton(int i2c_fd, int channel);
 
 /* Returns current servo angle in deg. */
 double get_servo_angle(int i2c_fd, int channel,
-                      const struct servo_config *cf);
+                      const struct servo_type *cf);
 
-/* Set PWM high voltage time in milliseconds. */
+/* Set PWM pulse length in milliseconds. */
 int set_pwm_ms(int i2c_fd, int channel, double hvt_ms, double freq_hz);
 
 /* Loops through all PWM counter values from max to min, sets servo to
@@ -147,18 +146,16 @@ void find_max_angle(int i2c_fd, int channel);
 
 /* Set servo angle. */
 int set_servo_angle(int i2c_fd, int channel, double angle_deg,
-                    const struct servo_config *cf);
+                    const struct servo_type *cf);
 
 /* Set duty PWM cycle from 0 to 100%. */
 int set_duty_cycle(int i2c_fd, int channel, double dutyc);
 
-#ifdef DEBUG
 /* Debug info */
 void print_mode_1(int val);
 
 void print_mode_2(int val);
 
 void print_regs(int i2c_fd, int channel);
-#endif
 
 #endif
