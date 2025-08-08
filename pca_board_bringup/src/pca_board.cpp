@@ -2,6 +2,7 @@ extern "C"{
 #include "i2c_pca_utils.h"
 }
 #include <rclcpp/rclcpp.hpp>
+#include <type_traits>
 #include "pca_board_interfaces/msg/servo_angle_deg.hpp"
 #include "pca_board_interfaces/msg/multi_servo_angle_deg.hpp"
 #include "pca_board_interfaces/msg/pwm_freq_hz.hpp"
@@ -54,7 +55,6 @@ const char *ang_max_str[] = {
     "angle_max_12", "angle_max_13", "angle_max_14", "angle_max_15"
 };
 
-
 // PCA9685 16 channel PWM board node.
 class PcaBoard : public rclcpp::Node
 {
@@ -88,6 +88,9 @@ class PcaBoard : public rclcpp::Node
     rclcpp::Subscription<DutyCyclePercent>::SharedPtr duty_cycle_set_sub_;
     rclcpp::Service<ServoState>::SharedPtr servo_state_service_;
 
+    template<class T>
+    T decl_and_get(const char *param, T dval);
+
     inline void ManageParams();
     inline void ManageTopics();
     void ConnectI2C();
@@ -109,6 +112,19 @@ public:
     void Sleep();
     void Restart();
 };
+
+template<class T>  // declare and get ROS parameter
+T PcaBoard::decl_and_get(const char *param, T dval)
+{
+    declare_parameter<T>(param, dval);
+    if (std::is_same<T, bool>::value)
+        return get_parameter(param).as_bool();
+    if (std::is_floating_point<T>::value)
+        return get_parameter(param).as_double();
+    if (!std::is_integral<T>::value)
+        throw;
+    return get_parameter(param).as_int();
+}
 
 void PcaBoard::ConnectI2C()
 {
@@ -196,7 +212,8 @@ void PcaBoard::MultiServoSetCallback(const MultiServoAngleDeg::SharedPtr msg)
     int cnt = 0;
     uint16_t cb = msg->channel_bits;
     while (cb > 0){
-        SetServoAngle(cnt, msg->angle[cnt]);
+        if (cb & 1)
+            SetServoAngle(cnt, msg->angle[cnt]);
         cnt++;
         cb >>= 1;
     }
@@ -204,42 +221,32 @@ void PcaBoard::MultiServoSetCallback(const MultiServoAngleDeg::SharedPtr msg)
 
 void PcaBoard::ManageParams()
 {
-    declare_parameter<int>("slave_addr", 0x40);
-    declare_parameter<int>("i2c", 1);
-    declare_parameter<double>("freq", 50.0);
-    declare_parameter<double>("osc_clock_hz", in_osc_hz);
-    declare_parameter<double>("angle_range", 180.0);
-    declare_parameter<double>("pl_min", 1.0);
-    declare_parameter<double>("pl_max", 2.0);
-    declare_parameter<double>("zero_pos", 0.0);
-    declare_parameter<double>("angle_min", 0.0);
-    declare_parameter<double>("angle_max", 180.0);
+    slave_addr      = decl_and_get<int>("slave_addr", 0x40);
+    i2c_adapter_num = decl_and_get<int>("i2c", 1);
+    freq            = decl_and_get<double>("freq", 50.0);
+    osc_clock_hz    = decl_and_get<double>("osc_clock_hz", in_osc_hz);
 
-    slave_addr = get_parameter("slave_addr").as_int();
-    i2c_adapter_num = get_parameter("i2c").as_int();
-    freq = get_parameter("freq").as_double();
-    osc_clock_hz = get_parameter("osc_clock_hz").as_double();
-    double angle_range_default = get_parameter("angle_range").as_double();
-    double pl_min_default = get_parameter("pl_min").as_double();
-    double pl_max_default = get_parameter("pl_max").as_double();
-    double zero_pos_default = get_parameter("zero_pos").as_double();
-    double angle_min_default = get_parameter("angle_min").as_double();
-    double angle_max_default = get_parameter("angle_max").as_double();
+    double angle_range_default = decl_and_get<double>("angle_range", 180.0);
+    double pl_min_default      = decl_and_get<double>("pl_min", 1.0);
+    double pl_max_default      = decl_and_get<double>("pl_max", 2.0);
+    double zero_pos_default    = decl_and_get<double>("zero_pos", 0.0);
+    double angle_min_default   = decl_and_get<double>("angle_min", 0.0);
+    double angle_max_default   = decl_and_get<double>("angle_max", 180.0);
 
     for (int i = 0; i < max_channels; i++){
-        declare_parameter<double>(angle_range_str[i], angle_range_default);
-        declare_parameter<double>(pl_min_str[i], pl_min_default);
-        declare_parameter<double>(pl_max_str[i], pl_max_default);
-        declare_parameter<double>(zero_pos_str[i], zero_pos_default);
-        declare_parameter<double>(ang_min_str[i], angle_min_default);
-        declare_parameter<double>(ang_max_str[i], angle_max_default);
         stp[i].pwm_freq = freq;  // one PWM for an entire board
-        stp[i].angle_range = get_parameter(angle_range_str[i]).as_double();
-        stp[i].pulse_len_min = get_parameter(pl_min_str[i]).as_double();
-        stp[i].pulse_len_max = get_parameter(pl_max_str[i]).as_double();
-        scf[i].zero_pos = get_parameter(zero_pos_str[i]).as_double();
-        scf[i].min = get_parameter(ang_min_str[i]).as_double();
-        scf[i].max = get_parameter(ang_max_str[i]).as_double();
+        stp[i].angle_range = decl_and_get<double>(angle_range_str[i],
+                angle_range_default);
+        stp[i].pulse_len_min = decl_and_get<double>(pl_min_str[i],
+                pl_min_default);
+        stp[i].pulse_len_max = decl_and_get<double>(pl_max_str[i],
+                pl_max_default);
+        scf[i].zero_pos = decl_and_get<double>(zero_pos_str[i],
+                zero_pos_default);
+        scf[i].min = decl_and_get<double>(ang_min_str[i],
+                angle_min_default);
+        scf[i].max = decl_and_get<double>(ang_max_str[i],
+                angle_max_default);
     }
 }
 
