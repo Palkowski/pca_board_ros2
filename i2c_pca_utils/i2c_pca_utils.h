@@ -2,8 +2,7 @@
 #define I2C_PCA_UTILS_H_SENTRY 1
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <linux/i2c.h>
+//#include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <i2c/smbus.h>
 #include <sys/ioctl.h>
@@ -84,11 +83,11 @@ struct servo_type {
     double pulse_len_max;  /* ms */
 };
 
-const int pwm_min = 0x0;
-const int pwm_max = 0xfff;
-const int prescale_min = 0x03;
-const int prescale_max = 0xff;
-const double in_osc_hz = 25000000.0;  /* PCA9685 internal oscillator */
+extern const int pwm_min;
+extern const int pwm_max;
+extern const int prescale_min;
+extern const int prescale_max;
+extern const double in_osc_hz;  /* PCA9685 internal oscillator */
 
 /* Opens I2C communication and returns file descriptor assigned to I2C
  * adapter, or -1 in case of an error. */

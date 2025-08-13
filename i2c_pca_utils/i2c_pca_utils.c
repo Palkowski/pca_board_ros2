@@ -1,6 +1,12 @@
 #include "i2c_pca_utils.h"
 
 
+const int pwm_min = 0x0;
+const int pwm_max = 0xfff;
+const int prescale_min = 0x03;
+const int prescale_max = 0xff;
+const double in_osc_hz = 25000000.0;  /* PCA9685 internal oscillator */
+
 /* Opens I2C communication and returns file descriptor assigned to I2C
  * adapter, or -1 in case of an error. */
 int connect_i2c(int adapter_num)
@@ -247,46 +253,3 @@ void print_regs(int i2c_fd, int channel)
     res |= (tmp << 8);
     printf("ALL PWM OFF = %d\n", res);
 }
-
-/* Program for servo testing */
-/*
-int main(int argc, char **argv)
-{
-    int fd, cn, i2c_bus, slave_addr;
-    double angle;
-    struct servo_type cf;
-
-    cf.pwm_freq = 50;
-    cf.pulse_len_min = 1.0;
-    cf.pulse_len_max = 2.0;
-    cf.angle_range = 90;
-
-    i2c_bus = 1;
-    slave_addr = 0x40;
-
-    if (argc != 3){
-        printf("USAGE: set-servo-angle <channel> <angle>\n");
-    } else {
-        sscanf(argv[1], "%d", &cn);
-        sscanf(argv[2], "%lf", &angle);
-        printf("cn = %d, angle = %lf\n", cn, angle);
-    }
-    fd = connect_i2c(i2c_bus);
-    if (fd < 0){
-        printf("Can't connect to I2C device.");
-        exit(1);
-    }
-    if (select_slave_addr(fd, slave_addr) < 0){
-        printf("Can't select slave addr \"0x40\".");
-        exit(1);
-    }
-    if (set_pwm_freq(fd, cf.pwm_freq, in_osc_hz) < 0){
-        printf("Can't set pwm freq \"50\".\n");
-        exit(1);
-    }
-    wake_up(fd);
-    set_servo_angle(fd, cn, angle, &cf);
-    print_regs(fd, cn);
-    return 0;
-}
-*/

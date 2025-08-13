@@ -1,5 +1,7 @@
 build/
 install/
 log/
-pca_board_bringup/tags
+*tags
 *.swp
+i2c_pca_utils/*.o
+i2c_pca_utils/set-servo-angle
